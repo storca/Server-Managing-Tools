@@ -1,35 +1,16 @@
 #!/usr/bin/python2.7
 # -*- coding: utf-8 -*-
 
-import os
-import time
+from ConfigParser import *
+from logging import *
 import mysql.connector
 from mysql.connector import errorcode
+import os
+import time
 
-
-gamenames = {
-"tf2server":"Team Fortress 2",
-"csgoserver":"Counter Strike Global Offensive",
-"gmodserver":"Garry's Mod",
-"ts3server":"TeamSpeak 3",
-"sinusbot":"Sinusbot"
-}
-
-serversPorts = {
-"tf2server":27015,
-"csgoserver":27016,
-"gmodserver":27017,
-"ts3server":9987,
-"sinusbot":8087
-}
-
-serversUrls = {
-"tf2server":"steam://connect/teamiskog.ddns.net:27015",
-"csgoserver":"steam://connect/teamiskog.ddns.net:27016",
-"gmodserver":"steam://connect/teamiskog.ddns.net:27017",
-"ts3server":"ts3server://teamiskog.ddns.net?port=9987",
-"sinusbot":"None"
-}
+#Those filenames could also be paths
+configFileName = "mon.conf"
+logFileName = "mon.log"
 
 class mysqlConn:
     def __init__(self, login="root", password="", db=None):
@@ -70,8 +51,12 @@ class mysqlConn:
             cnx.commit()
         except:
             print("Cannot register server "+serverName)
-    def updateServer(self, serverName, status, inRepair):
-        query = "UPDATE gameservers SET status=\'{}\', inRepair=\'{}\', lastChecked=\'{}\', url=\'{}\' WHERE serverName=\'{}\'".format(status, inRepair, time.strftime('%Y-%m-%d %H:%M:%S'), serversUrls[serverName], serverName)
+    def updateServer(self, serverName, status=None, inRepair=None):
+        if inRepair == None:
+            query = "UPDATE gameservers set status=\'{}\', lastChecked=\'{}\' where serverName=\'{}\'".format(status, time.strftime('%Y-%m-%d %H:%M:%S'))
+        else:
+            query = "UPDATE gameservers SET status=\'{}\', inRepair=\'{}\', lastChecked=\'{}\', url=\'{}\' WHERE serverName=\'{}\'".format(status, inRepair, time.strftime('%Y-%m-%d %H:%M:%S'), serversUrls[serverName], serverName)
+        query = "UPDATE gameservers SET "
         print(query)
         mysqlCursor.execute(query)
         #cnx.commit()
@@ -91,10 +76,65 @@ def exists(name):
             return True
     return False
 
-def run():
+def init(configFileName, logFileName):
+    try:
+        config = ConfigParser()
+        try:
+            config.read(path)
+        except ConfigParser.ParsingError as err:
+            logging.warning("Invalid syntax in config file \"{}\"".format(path))
+            logging.warning(err)
+            return None
+        except ConfigParser.MissingSectionHeaderError as err:
+            logging.warning("Missing section header in config file \"{}\"".format(path))
+            logging.warning(err)
+            return None
+        except Exception as err:
+            logging.warning("Unknown error : {}".format(err))
+            return None
+        except IOError:
+            print("Cannot find config file {}".format(configFileName))
+            return None
+        else
+            return config
+
+
+    sections = config.sections()
+
+    #Checking the config file
+    for section in sections:
+        options = config.options(section)
+        needed_options = ['name', 'port', 'url']
+        for option in needed_options:
+            if option not in options:
+                log.warning("Missing option \'{}\' in section \'{}\'".format(option, section))
+            elif config.get(section, option) == '':
+                log.warning("Missing value in option \'{}\' in section \'{}\'".format(option, section))
+
+    return config
+
+def run(config):
+    gamenames = config.sections()
     print("Monitoring is running...")
     if mysqlObj.createTables():
         print("Table created")
+        for gamesv in gamenames:
+            if not exists(gamesv):
+                mysqlObj.registerServer(gamesv)
+            if config.has_option(gamesv, "port"):
+                result = os.system("netstat -an | grep \""+str(serversPorts[i])+"\"")
+                if result == "256" or result == 256:
+                    mysqlObj.updateServer(gamesv, status=0)
+                else:
+                    mysqlObj.updateServer(gamesv, status=1)
+            elif config.has_option(gamesv, "in_maintain"):
+                try:
+                    val = config.getboolean(gamesv, "in_maintain")
+                except ValueError:
+                    logging.warning("Invalid boolean value in section \'{}\' with option \'{}\'".format(gamesv, "in_maintain"))
+                else:
+                    mysqlObj.updateServer(gamesv, inRepair=val)
+
         for t in serversPorts:
             if not exists(t):
                 mysqlObj.registerServer(t)
@@ -107,9 +147,13 @@ def run():
     cnx.commit()
     mysqlObj.close()
 
+
+
 mysqlObj = mysqlConn("login", "pass", "db")
 if mysqlObj.begin():
-    run()
+    config = init(configFileName, logFileName)
+    if config != None:
+        run(config)
 else:
     print("Cannot connect to database")
     exit()
