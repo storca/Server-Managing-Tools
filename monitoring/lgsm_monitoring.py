@@ -191,7 +191,7 @@ def run(config):
 
 
 
-mysqlObj = mysqlConn("root", "", "test")
+mysqlObj = mysqlConn("root", "", "myDatabase")
 
 if logFileName == None:
     logging.basicConfig(level=loglevel)
