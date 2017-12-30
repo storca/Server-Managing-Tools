@@ -12,9 +12,8 @@ python:
   - "nightly"
 # command to install dependencies
 #install:
-#  - pip install -r requirements.txt
+  - pip install -r requirements.txt
 # command to run tests
 script:
 #  - pytest # or py.test for Python versions 3.5 and below
-#   - py.test $PWD/monitoring/lgsm_monitoring.py
-   - python -m $PWD/monitoring/lgsm_monitoring.py
+   - py.test $PWD/monitoring/lgsm_monitoring.py
